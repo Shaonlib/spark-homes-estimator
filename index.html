@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Spark Estimator — Field Repair Cost Tool</title>
+<meta name="description" content="Mobile-first repair cost estimator for Spark Homes acquisition walkthroughs.">
+<meta name="theme-color" content="#0F1B33">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spark Estimator">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#0F1B33;
+  --navy-2:#16233F;
+  --navy-3:#1F3057;
+  --paper:#EDF0EC;
+  --paper-2:#E2E7E1;
+  --card:#FFFFFF;
+  --ink:#131A22;
+  --ink-dim:#5B6672;
+  --line:#D7DCD6;
+  --orange:#E8590C;
+  --orange-dim:#FCE4D6;
+  --green:#2F9E44;
+  --green-dim:#DEF3E2;
+  --red:#D6402E;
+  --red-dim:#FBE1DD;
+  --amber:#C98A00;
+  --radius:10px;
+  --disp:'Barlow Condensed',sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-top:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;height:100%;background:var(--paper);color:var(--ink);font-family:var(--body);overscroll-behavior-y:none;}
+body{padding-top:var(--safe-top);}
+button{font-family:inherit;}
+input,select,textarea{font-family:inherit;}
+::selection{background:var(--orange-dim);}
+
+/* blueprint grid texture, used sparingly on app header only */
+.blueprint{
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size:16px 16px;
+}
+
+#app{max-width:560px;margin:0 auto;min-height:100%;background:var(--paper);position:relative;padding-bottom:96px;}
+
+/* ---------- Top bar ---------- */
+.topbar{
+  background:var(--navy);color:#fff;padding:14px 16px 16px;
+  position:sticky;top:0;z-index:30;
+}
+.topbar .brand{display:flex;align-items:center;gap:10px;}
+.brand-mark{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.brand-mark img{width:100%;height:auto;}
+.brand-name{font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:.02em;text-transform:uppercase;}
+.brand-sub{font-family:var(--mono);font-size:10px;color:#9FB0C9;letter-spacing:.08em;text-transform:uppercase;margin-top:1px;}
+.topbar-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.icon-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;}
+.icon-btn:active{background:rgba(255,255,255,.2);}
+
+.proj-title-row{margin-top:12px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.proj-title{font-family:var(--disp);font-size:26px;font-weight:700;line-height:1.05;text-transform:uppercase;letter-spacing:.01em;}
+.proj-addr{font-size:12px;color:#B7C3D6;margin-top:2px;}
+
+/* progress */
+.progress-wrap{margin-top:12px;}
+.progress-meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:#B7C3D6;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
+.progress-track{height:8px;background:rgba(255,255,255,.12);border-radius:6px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--orange),#FF8A3D);border-radius:6px;transition:width .35s ease;}
+
+/* ---------- Nav tabs ---------- */
+.tabs{display:flex;background:var(--navy-2);position:sticky;top:0;z-index:29;border-bottom:1px solid rgba(255,255,255,.08);}
+.tab{flex:1;text-align:center;padding:11px 4px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#8CA0BE;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;}
+.tab.active{color:#fff;border-bottom-color:var(--orange);}
+
+/* ---------- Screens ---------- */
+.screen{padding:14px 14px 8px;}
+.hidden{display:none !important;}
+
+/* Project list */
+.plist-header{padding:20px 16px 8px;}
+.plist-header h1{font-family:var(--disp);font-size:32px;margin:0 0 2px;text-transform:uppercase;color:var(--navy);}
+.plist-header p{margin:0;color:var(--ink-dim);font-size:13px;}
+.proj-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;box-shadow:0 1px 2px rgba(15,27,51,.04);}
+.proj-card:active{background:#F7F8F6;}
+.proj-card-name{font-weight:700;font-size:16px;}
+.proj-card-addr{font-size:12px;color:var(--ink-dim);margin-top:2px;}
+.proj-card-total{font-family:var(--mono);font-weight:600;font-size:16px;color:var(--navy);text-align:right;}
+.proj-card-date{font-size:10px;color:var(--ink-dim);margin-top:2px;text-transform:uppercase;letter-spacing:.03em;}
+.big-cta{display:block;width:100%;background:var(--orange);color:#fff;border:none;border-radius:var(--radius);padding:15px;font-weight:700;font-size:15px;cursor:pointer;margin:16px 0 6px;}
+.big-cta:active{background:#C94A08;}
+.empty-state{text-align:center;padding:50px 20px;color:var(--ink-dim);}
+.empty-state .emoji{font-size:40px;margin-bottom:8px;}
+
+/* Section / room cards */
+.section-block{margin-bottom:18px;}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 2px;}
+.section-head h2{font-family:var(--disp);font-size:19px;text-transform:uppercase;letter-spacing:.02em;color:var(--navy);margin:0;}
+.add-room-btn{background:none;border:1.5px dashed var(--navy-3);color:var(--navy);font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:var(--mono);}
+.add-room-btn:active{background:var(--paper-2);}
+
+.room-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;}
+.room-head{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:#F7F8F6;}
+.room-head-name{font-weight:700;font-size:14px;}
+.room-head-sub{font-family:var(--mono);font-size:11px;color:var(--ink-dim);}
+.room-remove{background:none;border:none;color:var(--red);font-size:11px;font-weight:600;cursor:pointer;padding:4px 6px;font-family:var(--mono);}
+
+/* group */
+.group{border-top:1px solid var(--line);}
+.group-head{display:flex;align-items:center;gap:8px;padding:11px 13px;cursor:pointer;}
+.group-head:active{background:#FAFAF8;}
+.group-chev{transition:transform .18s ease;color:var(--ink-dim);font-size:11px;width:12px;text-align:center;}
+.group-chev.open{transform:rotate(90deg);}
+.group-title{flex:1;font-weight:600;font-size:13.5px;}
+.group-status{width:9px;height:9px;border-radius:50%;background:var(--line);flex-shrink:0;}
+.group-status.done{background:var(--green);}
+.group-status.noaction{background:var(--ink-dim);}
+.group-sub-total{font-family:var(--mono);font-size:12px;color:var(--ink-dim);}
+
+.group-body{padding:0 13px 13px;}
+.noaction-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px dashed var(--line);margin-bottom:6px;}
+.noaction-row label{font-size:12.5px;color:var(--ink-dim);flex:1;}
+
+.item-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #F0F1EE;}
+.item-row:last-child{border-bottom:none;}
+.item-check{width:20px;height:20px;flex-shrink:0;accent-color:var(--orange);}
+.item-main{flex:1;min-width:0;}
+.item-name{font-size:13.5px;font-weight:500;line-height:1.25;}
+.item-meta{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);margin-top:1px;display:flex;gap:6px;align-items:center;}
+.item-meta button{background:none;border:none;color:var(--navy-3);text-decoration:underline;cursor:pointer;font-family:var(--mono);font-size:10.5px;padding:0;}
+.qty-group{display:flex;align-items:center;gap:0;flex-shrink:0;}
+.qty-btn{width:26px;height:26px;border:1px solid var(--line);background:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--navy);}
+.qty-btn:first-child{border-radius:6px 0 0 6px;}
+.qty-btn:last-child{border-radius:0 6px 6px 0;}
+.qty-input{width:38px;height:26px;text-align:center;border:1px solid var(--line);border-left:none;border-right:none;font-family:var(--mono);font-size:12.5px;}
+.line-total{font-family:var(--mono);font-weight:600;font-size:13px;width:62px;text-align:right;flex-shrink:0;}
+.item-del{background:none;border:none;color:var(--ink-dim);font-size:15px;cursor:pointer;padding:2px 3px;flex-shrink:0;}
+
+.add-item-btn{width:100%;text-align:left;background:none;border:1px dashed var(--line);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--navy-3);cursor:pointer;font-weight:600;margin-top:4px;}
+
+/* sticky total bar */
+.totalbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  background:var(--navy);color:#fff;
+  padding:10px 16px calc(10px + var(--safe-bottom));
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 -3px 14px rgba(0,0,0,.18);
+}
+.totalbar-inner{max-width:560px;margin:0 auto;width:100%;display:flex;align-items:center;justify-content:space-between;}
+.totalbar-label{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9FB0C9;}
+.totalbar-amt{font-family:var(--mono);font-weight:700;font-size:24px;color:var(--orange);font-variant-numeric:tabular-nums;}
+.totalbar-export{background:var(--orange);color:#fff;border:none;border-radius:8px;padding:11px 16px;font-weight:700;font-size:13px;cursor:pointer;}
+.totalbar-export:active{background:#C94A08;}
+
+/* modals */
+.overlay{position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:60;display:flex;align-items:flex-end;justify-content:center;}
+.overlay.center{align-items:center;padding:20px;}
+.sheet{background:#fff;width:100%;max-width:560px;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + var(--safe-bottom));max-height:88vh;overflow-y:auto;}
+.overlay.center .sheet{border-radius:14px;max-height:80vh;}
+.sheet h3{font-family:var(--disp);text-transform:uppercase;font-size:20px;margin:0 0 12px;color:var(--navy);}
+.field{margin-bottom:13px;}
+.field label{display:block;font-size:11.5px;font-weight:600;color:var(--ink-dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em;}
+.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:14.5px;background:#fff;color:var(--ink);}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--orange);}
+.btn-row{display:flex;gap:8px;margin-top:16px;}
+.btn{flex:1;padding:12px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;border:none;}
+.btn-primary{background:var(--orange);color:#fff;}
+.btn-primary:active{background:#C94A08;}
+.btn-secondary{background:var(--paper-2);color:var(--ink);}
+.btn-danger{background:var(--red-dim);color:var(--red);}
+.close-x{position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;color:var(--ink-dim);cursor:pointer;}
+.sheet{position:relative;}
+
+/* Photos */
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+.photo-thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#ddd;cursor:pointer;border:1px solid var(--line);}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.photo-thumb .serial-tag{position:absolute;bottom:0;left:0;right:0;background:rgba(15,27,51,.82);color:#fff;font-family:var(--mono);font-size:9px;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.add-photo-tile{aspect-ratio:1;border:2px dashed var(--line);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--navy-3);font-size:12px;font-weight:600;cursor:pointer;gap:4px;}
+.add-photo-tile .plus{font-size:22px;}
+
+/* Deal analyzer */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
+.card h3{font-family:var(--disp);font-size:18px;text-transform:uppercase;margin:0 0 10px;color:var(--navy);}
+.dr{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #F0F1EE;font-size:13.5px;}
+.dr:last-child{border-bottom:none;}
+.dr .k{color:var(--ink-dim);}
+.dr .v{font-family:var(--mono);font-weight:600;}
+.margin-gauge{margin-top:12px;}
+.gauge-track{height:22px;background:var(--paper-2);border-radius:11px;overflow:hidden;position:relative;}
+.gauge-fill{height:100%;border-radius:11px;transition:width .3s ease;}
+.gauge-label{text-align:center;margin-top:6px;font-family:var(--mono);font-weight:700;font-size:20px;}
+.gauge-sub{text-align:center;font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;font-family:var(--mono);}
+
+/* Settings */
+.setting-item-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #F0F1EE;}
+.setting-item-row .nm{flex:1;font-size:13px;}
+.setting-item-row input{width:80px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-family:var(--mono);font-size:12.5px;text-align:right;}
+.setting-item-row .grp-tag{font-family:var(--mono);font-size:9.5px;color:var(--ink-dim);text-transform:uppercase;}
+.search-box{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;margin-bottom:10px;}
+.badge{display:inline-block;background:var(--orange-dim);color:var(--orange);font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:5px;font-weight:700;text-transform:uppercase;}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;z-index:80;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+.help-text{font-size:11.5px;color:var(--ink-dim);margin-top:-4px;margin-bottom:12px;line-height:1.4;}
+.install-banner{background:var(--navy-3);color:#fff;border-radius:10px;padding:11px 13px;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;}
+.install-banner button{background:var(--orange);border:none;color:#fff;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;}
+.offline-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:#9FB0C9;text-transform:uppercase;}
+.offline-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+.offline-pill.off .dot{background:var(--red);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== PROJECT LIST SCREEN ===== -->
+  <div id="screen-list">
+    <div class="plist-header">
+      <div class="brand" style="margin-bottom:14px;">
+        <div class="brand-mark"><img src="data:image/png;base64,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" alt="Spark Group"></div>
+        <div>
+          <div class="brand-name" style="color:var(--navy);">Spark Estimator</div>
+          <div class="brand-sub" style="color:var(--ink-dim);">Field repair cost tool</div>
+        </div>
+        <div style="margin-left:auto;">
+          <button class="icon-btn" style="background:var(--paper-2);border-color:var(--line);color:var(--navy);" onclick="openSettings()">⚙</button>
+        </div>
+      </div>
+      <h1>Projects</h1>
+      <p>Walkthrough estimates, saved on this device.</p>
+    </div>
+    <div class="screen" style="padding-top:6px;">
+      <button class="big-cta" onclick="openNewProjectModal()">+ New Walkthrough</button>
+      <div id="project-list"></div>
+    </div>
+  </div>
+
+  <!-- ===== PROJECT SCREEN ===== -->
+  <div id="screen-project" class="hidden">
+    <div class="topbar blueprint">
+      <div class="topbar-row">
+        <button class="icon-btn" onclick="goHome()">←</button>
+        <span class="offline-pill" id="offline-pill"><span class="dot"></span><span id="offline-text">Online</span></span>
+        <button class="icon-btn" onclick="openProjectEdit()">✎</button>
+      </div>
+      <div class="proj-title-row">
+        <div>
+          <div class="proj-title" id="proj-title">—</div>
+          <div class="proj-addr" id="proj-addr"></div>
+        </div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-meta"><span id="progress-text">0 / 0 groups</span><span id="progress-pct">0%</span></div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="estimate" onclick="switchTab('estimate')">Estimate</button>
+      <button class="tab" data-tab="photos" onclick="switchTab('photos')">Photos</button>
+      <button class="tab" data-tab="deal" onclick="switchTab('deal')">Deal</button>
+    </div>
+
+    <div class="screen" id="tab-estimate"></div>
+    <div class="screen hidden" id="tab-photos"></div>
+    <div class="screen hidden" id="tab-deal"></div>
+
+    <div class="totalbar">
+      <div class="totalbar-inner">
+        <div>
+          <div class="totalbar-label">Estimated Repair Total</div>
+          <div class="totalbar-amt" id="totalbar-amt">$0</div>
+        </div>
+        <button class="totalbar-export" onclick="exportProject()">Export ZIP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SETTINGS SCREEN ===== -->
+  <div id="screen-settings" class="hidden">
+    <div class="topbar" style="padding-bottom:14px;">
+      <div class="topbar-row">
+        <button class="icon-btn" onclick="goHome()">←</button>
+        <div class="brand-name" style="font-size:18px;">Standard Pricing</div>
+        <div style="width:38px;"></div>
+      </div>
+    </div>
+    <div class="screen">
+      <p class="help-text">Edits here update the master price list and roll out to every project. Per-project overrides (set inside a walkthrough) always win over these values.</p>
+      <input class="search-box" id="settings-search" placeholder="Search items…" oninput="renderSettings()">
+      <button class="big-cta" style="margin-top:0;" onclick="openAddGlobalItem()">+ Add Standard Item</button>
+      <div id="settings-list"></div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:14px;" onclick="resetPricingDefaults()">Reset all pricing to contest defaults</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="modal-root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   SPARK HOMES FIELD ESTIMATOR
+   Single-file, offline-first PWA. No build step, no backend.
+   ============================================================ */
+
+/* ---------------- Default catalog (mirrors repair-items.csv — single source of truth) ---------------- */
+const DEFAULT_ITEMS = [
+["ig-01","Refinish Hardwood Floor",2.35,"sqft","flooring"],["ig-02","New Hardwoods 1.5\"",10.0,"sqft","flooring"],
+["ig-03","New Hardwoods 2\"",4.75,"sqft","flooring"],["ig-04","Hardwood Splicing",8.4,"sqft","flooring"],
+["ig-05","Vinyl Plank",2.5,"sqft","flooring"],["ig-06","Carpet",1.9,"sqft","flooring"],
+["ig-07","Interior Paint — 2 Tone",2.95,"sqft","paint"],["ig-08","Drywall Repair",900.0,"1,000 sqft","paint"],
+["ig-09","Wallpaper Removal",250.0,"room","paint"],["ig-10","Interior Door — Hollow Slab",125.0,"ea.","doors"],
+["ig-11","Interior Door Hardware (Knob + Hinges + Labor)",25.0,"ea.","doors"],["ig-12","Bifold Door with Framing",400.0,"ea.","closet"],
+["ig-13","Interior Door — Pre-hung",200.0,"ea.","doors"],["ig-14","Front Entry Door",475.0,"ea.","doors"],
+["ig-15","Front Entry Door Hardware",80.0,"ea.","doors"],["ig-16","Exterior Door Hardware",75.0,"handle","doors"],
+["ig-17","Exterior Insulated Side Door (Installed)",500.0,"ea.","doors"],["ig-18","Sliding Glass Door",1025.0,"ea.","doors"],
+["ig-19","Trim Out (Casing, Crown, Baseboard)",3.75,"LF","general_punch"],["ig-20","MISC / Punch List",2650.0,"flat","general_punch"],
+["ig-21","Finish Out Labor",1350.0,"flat","general_punch"],["ig-22","Light Fixtures",70.0,"100 sqft","lighting"],
+["ig-23","Bedbug Spray / Heat Treat",475.0,"ea.","pest"],["ig-24","Termite Treatment",650.0,"ea.","pest"],
+["ig-25","Demo",1375.0,"variable","general_punch"],["ig-26","Haul Off",725.0,"load","general_punch"],
+["ig-27","Final Cleaning",325.0,"flat","general_punch"],["ig-28","Staging",0.9,"sqft","general_punch"],
+["kt-01","Hinges and Pulls",275.0,"kitchen","cabinets"],["kt-02","Cabinets Uppers",125.0,"LF","cabinets"],
+["kt-03","Cabinets Lowers",150.0,"LF","cabinets"],["kt-04","Cabinet Door Faces Only",80.0,"door","cabinets"],
+["kt-05","Cabinets (Labor & Paint)",1100.0,"kitchen","cabinets"],["kt-06","Granite + 4\" Splash Guard",40.0,"LF","countertops"],
+["kt-07","Backsplash",725.0,"house","countertops"],["kt-08","Misc Woodwork",500.0,"variable","countertops"],
+["kt-09","Tile — Large Areas",6.45,"sqft","countertops"],["kt-10","Tile — Small Areas",10.0,"sqft","countertops"],
+["kt-11","Undermount Kitchen Sink",325.0,"ea.","appliances"],["kt-12","Microwave / Hood",500.0,"ea.","appliances"],
+["kt-13","Range",725.0,"ea.","appliances"],["kt-14","Wall Oven",1075.0,"ea.","appliances"],
+["kt-15","Cooktop",550.0,"ea.","appliances"],["kt-16","Dishwasher",575.0,"ea.","appliances"],
+["kt-17","Fridge",1175.0,"ea.","appliances"],["ba-01","Granite ($/LF)",35.0,"LF","vanity"],
+["ba-02","New Bottom Vanity",125.0,"LF","vanity"],["ba-03","Home Depot Vanity w/ Sink (18\")",225.0,"ea.","vanity"],
+["ba-04","Toilet",150.0,"ea.","vanity"],["ba-05","Tile — Large Areas",5.8,"sqft","bath_tile"],
+["ba-06","Tile — Small Areas",10.0,"sqft","bath_tile"],["ba-07","Reglaze Tub or Chemical Clean",350.0,"ea.","tub_shower"],
+["ba-08","Reglaze Tub + Surround",750.0,"ea.","tub_shower"],["ba-09","Reglaze Shower",1325.0,"ea.","tub_shower"],
+["ba-10","Tiled Shower Tear Out + Tile Install",3100.0,"ea.","tub_shower"],["ba-11","Tub Tile Surround Tear Out + Tile Install (incl. tub)",2250.0,"ea.","tub_shower"],
+["ba-12","Shower Plastic Insert Tear Out + New Insert",825.0,"ea.","tub_shower"],["ba-13","Tub Tear Out + New Insert & Tub",1575.0,"ea.","tub_shower"],
+["ba-14","Undermount Sink",150.0,"ea.","vanity"],["ba-15","Mirror",200.0,"ea.","vanity"],
+["ba-16","HVL (needed if no window)",275.0,"ea.","tub_shower"],["as-01","Furnace",3350.0,"ea.","hvac"],
+["as-02","Condensing Unit",3300.0,"ea.","hvac"],["as-03","Package Unit",4700.0,"ea.","hvac"],
+["as-04","A-Coil (if no condensing unit)",1625.0,"ea.","hvac"],["as-05","Ducting (if NO HVAC)",3200.0,"ea.","hvac"],
+["as-06","Duct Cleaning — Floor Vents",550.0,"ea.","hvac"],["as-07","Window Unit Replacement 220",575.0,"ea.","hvac"],
+["as-08","Hot Water Heater w/ Expansion Tank",1425.0,"ea.","plumbing"],["as-09","Hot Water Heater Expansion Tank Only",200.0,"ea.","plumbing"],
+["as-10","Switches / Outlets",1400.0,"house","electrical"],["as-11","Standard Electrical",1650.0,"house","electrical"],
+["as-12","Subfloor",8.2,"sqft","structural"],["as-13","Framing",950.0,"variable","structural"],
+["as-14","Structural (Pier)",375.0,"pier","structural"],["as-15","Structural Foam Injection",5.85,"sqft of affected area","structural"],
+["as-16","Roof",1100.0,"225 sqft L&M","structural"],["as-17","Plumbing",1000.0,"variable","plumbing"],
+["as-18","Electrical Panel Swap to 200A",2350.0,"ea.","electrical"],["as-19","Full Electrical Rewire (to Studs)",5.65,"sqft","electrical"],
+["as-20","Full Electrical Rewire (leaving Drywall)",9.15,"sqft","electrical"],["as-21","Wall Insulation (to Studs)",1.2,"sqft","insulation_drywall"],
+["as-22","Attic Insulation",1225.0,"1,600 sqft house","insulation_drywall"],["as-23","New Drywall to Studs (L&M)",5.2,"sqft","insulation_drywall"],
+["as-24","Aluminum Wiring",2450.0,"variable","electrical"],["ex-01","Fence Repair — Chain Link / Wood Gate",225.0,"variable","fence"],
+["ex-02","Fence Repair — Chain Link",275.0,"LF","fence"],["ex-03","Fence Repair — Privacy 6ft",30.0,"LF","fence"],
+["ex-04","Landscaping",450.0,"variable","grounds"],["ex-05","Vinyl Siding (10'x10')",300.0,"square","siding"],
+["ex-06","Tuck Pointing",225.0,"variable","siding"],["ex-07","Exterior Paint",2.6,"sqft","siding"],
+["ex-08","Exterior Wood Repair",525.0,"variable","siding"],["ex-09","Siding Repair (10'x10')",975.0,"section","siding"],
+["ex-10","Tree Trimming",450.0,"variable","trees"],["ex-11","Tree Removal (w/o stump)",1450.0,"tree","trees"],
+["ex-12","Stump Grinding",250.0,"stump","trees"],["ex-13","Aluminum Window Paint (Int/Ext)",700.0,"house","windows"],
+["ex-14","Windows (3x5 sash)",425.0,"ea.","windows"],["ex-15","Window Repair — Non-Insulated (6x6+)",35.0,"sf","windows"],
+["ex-16","Window Repair — Insulated (6x6+)",40.0,"sf","windows"],["ex-17","Aluminum Framed Window Pane",100.0,"pane","windows"],
+["ex-18","Guttering",4.15,"LF","siding"],["ex-19","Concrete w/ Demo",200.0,"sqft","grounds"],
+["ex-20","Mowing (summer, every 2 weeks)",45.0,"mowing","grounds"],["ex-21","Garage Door — 1 Car",975.0,"ea.","garage"],
+["ex-22","Garage Door — 2 Car (Installed)",1225.0,"ea.","garage"],["ex-23","Garage Conversion",8850.0,"ea.","garage"]
+].map(([id,name,cost,unit,group])=>({id,name,cost,unit,group}));
+
+const GROUP_LABELS = {
+  flooring:"Flooring", paint:"Paint & Wall Repair", doors:"Doors", pest:"Pest Control",
+  general_punch:"General & Punch List",
+  cabinets:"Cabinets", countertops:"Countertops & Tile", appliances:"Appliances",
+  vanity:"Vanity & Countertop", tub_shower:"Tub & Shower", bath_tile:"Tile",
+  hvac:"HVAC", electrical:"Electrical", structural:"Structural", insulation_drywall:"Insulation & Drywall",
+  plumbing:"Plumbing",
+  fence:"Fence", siding:"Siding", windows:"Windows", garage:"Garage", trees:"Trees", grounds:"Grounds & Hardscape",
+  closet:"Closet", lighting:"Lighting"
+};
+
+// Room types: multi = user can add/remove instances. Singleton rooms auto-exist once per project.
+const ROOM_TYPES = {
+  interior:  {label:"Interior / General", section:"Interior / General", groups:["flooring","paint","doors","pest","general_punch"], multi:false},
+  kitchen:   {label:"Kitchen", section:"Kitchen", groups:["cabinets","countertops","appliances"], multi:false},
+  systems:   {label:"Systems & Structure", section:"Systems & Structure", groups:["hvac","electrical","structural","insulation_drywall","plumbing"], multi:false},
+  exterior:  {label:"Exterior", section:"Exterior", groups:["fence","siding","windows","garage","trees","grounds"], multi:false},
+  bathroom:  {label:"Bathroom", section:"Bathrooms", groups:["vanity","tub_shower","bath_tile"], multi:true},
+  bedroom:   {label:"Bedroom", section:"Bedrooms", groups:["flooring","paint","doors","closet"], multi:true},
+  living:    {label:"Living / Common Area", section:"Living / Common Areas", groups:["flooring","paint","doors","lighting"], multi:true}
+};
+const SECTION_ORDER = ["Interior / General","Kitchen","Bathrooms","Bedrooms","Living / Common Areas","Systems & Structure","Exterior"];
+
+/* ---------------- Storage helpers ---------------- */
+const LS_PROJECTS = "spark_projects_v1";
+const LS_SETTINGS = "spark_settings_v1";
+
+function loadProjects(){ try{return JSON.parse(localStorage.getItem(LS_PROJECTS))||[];}catch(e){return [];} }
+function saveProjects(list){ localStorage.setItem(LS_PROJECTS, JSON.stringify(list)); }
+function loadSettings(){
+  try{
+    const s = JSON.parse(localStorage.getItem(LS_SETTINGS));
+    if(s) return s;
+  }catch(e){}
+  return { priceOverrides:{}, customItems:[], deletedItemIds:[] };
+}
+function saveSettings(s){ localStorage.setItem(LS_SETTINGS, JSON.stringify(s)); }
+
+let settings = loadSettings();
+let projects = loadProjects();
+let currentProjectId = null;
+let currentTab = "estimate";
+let openGroups = new Set(); // groupInstanceKey currently expanded
+
+function uid(prefix){ return prefix+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* Full merged catalog: defaults + global custom items, minus globally deleted, with global price overrides applied */
+function getCatalog(){
+  const base = DEFAULT_ITEMS
+    .filter(it => !settings.deletedItemIds.includes(it.id))
+    .map(it => ({...it, cost: settings.priceOverrides[it.id] !== undefined ? settings.priceOverrides[it.id] : it.cost}));
+  return base.concat(settings.customItems);
+}
+function catalogById(){
+  const map = {};
+  getCatalog().forEach(it => map[it.id] = it);
+  return map;
+}
+
+/* ---------------- Project helpers ---------------- */
+function getProject(id){ return projects.find(p=>p.id===id); }
+function persistProject(p){ p.updatedAt = Date.now(); saveProjects(projects); }
+
+function newProject(name, address){
+  const p = {
+    id: uid("proj"),
+    name: name || "Untitled Walkthrough",
+    address: address || "",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    rooms: [
+      {instanceId: uid("room"), type:"interior", label:"Interior / General"},
+      {instanceId: uid("room"), type:"kitchen", label:"Kitchen"},
+      {instanceId: uid("room"), type:"systems", label:"Systems & Structure"},
+      {instanceId: uid("room"), type:"exterior", label:"Exterior"}
+    ],
+    noAction: {}, // key `${roomInstanceId}::${group}` -> true
+    selections: {}, // key = lineId (uid) -> {itemId, roomInstanceId, group, qty, costOverride}
+    projectCustomItems: [], // items added ad-hoc for this project only: {id,name,cost,unit,group}
+    projectDeletedItemIds: [], // standard item ids hidden from this project only
+    priceOverrides: {}, // itemId -> cost, project-level
+    photos: [], // {id,dataUrl,note,serial,createdAt}
+    deal: { arv:"", offerPrice:"", holdingMonths:2, holdingCostPerMonth:900, sellingCostPct:8 }
+  };
+  projects.push(p);
+  saveProjects(projects);
+  return p;
+}
+
+function roomLabel(room, allRoomsOfType){
+  const def = ROOM_TYPES[room.type];
+  if(!def.multi) return def.label;
+  return room.label;
+}
+
+function nextInstanceNumber(project, type){
+  const n = project.rooms.filter(r=>r.type===type).length;
+  return n+1;
+}
+function addRoomInstance(project, type){
+  const def = ROOM_TYPES[type];
+  const num = nextInstanceNumber(project, type);
+  project.rooms.push({instanceId: uid("room"), type, label: `${def.label} ${num}`});
+  persistProject(project);
+}
+function removeRoomInstance(project, instanceId){
+  project.rooms = project.rooms.filter(r=>r.instanceId!==instanceId);
+  // remove selections & noAction entries tied to this room
+  Object.keys(project.selections).forEach(k=>{
+    if(project.selections[k].roomInstanceId===instanceId) delete project.selections[k];
+  });
+  Object.keys(project.noAction).forEach(k=>{
+    if(k.startsWith(instanceId+"::")) delete project.noAction[k];
+  });
+  persistProject(project);
+}
+
+/* project-effective catalog: global catalog + project custom items, minus project-deleted, with project overrides */
+function projectCatalogById(project){
+  const map = catalogById();
+  project.projectCustomItems.forEach(it => map[it.id] = it);
+  project.projectDeletedItemIds.forEach(id => delete map[id]);
+  const out = {};
+  Object.keys(map).forEach(id=>{
+    const it = map[id];
+    const cost = project.priceOverrides[id] !== undefined ? project.priceOverrides[id] : it.cost;
+    out[id] = {...it, cost};
+  });
+  return out;
+}
+
+function itemsForGroup(project, group){
+  const cat = projectCatalogById(project);
+  return Object.values(cat).filter(it=>it.group===group).sort((a,b)=>a.name.localeCompare(b.name));
+}
+
+function selectionsForRoomGroup(project, roomInstanceId, group){
+  return Object.entries(project.selections)
+    .filter(([k,v])=>v.roomInstanceId===roomInstanceId && v.group===group)
+    .map(([k,v])=>({lineId:k, ...v}));
+}
+
+function projectTotal(project){
+  let total = 0;
+  Object.values(project.selections).forEach(sel=>{
+    total += (sel.qty||0) * (sel.costOverride!==undefined && sel.costOverride!==null ? sel.costOverride : sel.itemCost);
+  });
+  return total;
+}
+
+function groupIsTouched(project, roomInstanceId, group){
+  const key = roomInstanceId+"::"+group;
+  if(project.noAction[key]) return true;
+  return selectionsForRoomGroup(project, roomInstanceId, group).some(s=>s.qty>0);
+}
+
+function projectProgress(project){
+  let total=0, done=0;
+  project.rooms.forEach(room=>{
+    const def = ROOM_TYPES[room.type];
+    def.groups.forEach(g=>{
+      total++;
+      if(groupIsTouched(project, room.instanceId, g)) done++;
+    });
+  });
+  return {done, total, pct: total? Math.round(done/total*100):0};
+}
+
+/* ---------------- Rendering: Project List ---------------- */
+function fmtMoney(n){
+  return "$"+Math.round(n).toLocaleString("en-US");
+}
+function fmtMoney2(n){
+  return "$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtDate(ts){
+  return new Date(ts).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+}
+
+function renderProjectList(){
+  const el = document.getElementById("project-list");
+  if(projects.length===0){
+    el.innerHTML = `<div class="empty-state"><div class="emoji">🏚️</div>Start your first walkthrough.<br>Every project stays saved on this device.</div>`;
+    return;
+  }
+  const sorted = [...projects].sort((a,b)=>b.updatedAt-a.updatedAt);
+  el.innerHTML = sorted.map(p=>{
+    const total = projectTotal(p);
+    const prog = projectProgress(p);
+    return `<div class="proj-card" onclick="openProject('${p.id}')">
+      <div>
+        <div class="proj-card-name">${escapeHtml(p.name)}</div>
+        <div class="proj-card-addr">${escapeHtml(p.address||"No address set")} · ${prog.pct}% complete</div>
+      </div>
+      <div>
+        <div class="proj-card-total">${fmtMoney(total)}</div>
+        <div class="proj-card-date">${fmtDate(p.updatedAt)}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function goHome(){
+  currentProjectId = null;
+  show("screen-list");
+  renderProjectList();
+}
+function show(id){
+  ["screen-list","screen-project","screen-settings"].forEach(s=>{
+    document.getElementById(s).classList.toggle("hidden", s!==id);
+  });
+}
+function openSettings(){ show("screen-settings"); renderSettings(); }
+
+function openProject(id){
+  currentProjectId = id;
+  currentTab = "estimate";
+  show("screen-project");
+  renderProject();
+}
+
+/* ---------------- New / Edit Project Modals ---------------- */
+function openNewProjectModal(){
+  renderModal(`
+    <h3>New Walkthrough</h3>
+    <div class="field"><label>Property address or nickname</label><input id="np-name" placeholder="e.g. 214 Maple St"></div>
+    <div class="field"><label>Notes (optional)</label><input id="np-addr" placeholder="Tulsa, OK · 3bd / 2ba"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitNewProject()">Create</button>
+    </div>
+  `);
+}
+function submitNewProject(){
+  const name = document.getElementById("np-name").value.trim() || "Untitled Walkthrough";
+  const addr = document.getElementById("np-addr").value.trim();
+  const p = newProject(name, addr);
+  closeModal();
+  openProject(p.id);
+}
+function openProjectEdit(){
+  const p = getProject(currentProjectId);
+  renderModal(`
+    <h3>Edit Walkthrough</h3>
+    <div class="field"><label>Property address or nickname</label><input id="ep-name" value="${escapeAttr(p.name)}"></div>
+    <div class="field"><label>Notes</label><input id="ep-addr" value="${escapeAttr(p.address)}"></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" onclick="deleteProjectConfirm()">Delete</button>
+      <button class="btn btn-primary" onclick="submitEditProject()">Save</button>
+    </div>
+  `);
+}
+function submitEditProject(){
+  const p = getProject(currentProjectId);
+  p.name = document.getElementById("ep-name").value.trim() || p.name;
+  p.address = document.getElementById("ep-addr").value.trim();
+  persistProject(p);
+  closeModal();
+  renderProject();
+}
+function deleteProjectConfirm(){
+  renderModal(`
+    <h3>Delete this walkthrough?</h3>
+    <p style="font-size:13px;color:var(--ink-dim);">This removes all selections and photos. This can't be undone.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="reallyDeleteProject()">Delete</button>
+    </div>
+  `);
+}
+function reallyDeleteProject(){
+  projects = projects.filter(p=>p.id!==currentProjectId);
+  saveProjects(projects);
+  closeModal();
+  goHome();
+}
+
+/* ---------------- Modal / Toast plumbing ---------------- */
+function renderModal(inner, opts={}){
+  const root = document.getElementById("modal-root");
+  root.innerHTML = `<div class="overlay ${opts.center?'center':''}" id="active-overlay" onclick="if(event.target.id==='active-overlay')closeModal()">
+    <div class="sheet">
+      <button class="close-x" onclick="closeModal()">✕</button>
+      ${inner}
+    </div>
+  </div>`;
+}
+function closeModal(){ document.getElementById("modal-root").innerHTML=""; }
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>t.classList.remove("show"), 2200);
+}
+function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function escapeAttr(s){ return escapeHtml(s); }
+// Escapes a string for safe embedding inside a single-quoted JS string literal within an inline onclick="" HTML attribute
+function escJs(s){ return escapeHtml(s||"").replace(/'/g, "&#39;"); }
+
+/* ---------------- Tabs ---------------- */
+function switchTab(tab){
+  currentTab = tab;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.tab===tab));
+  ["estimate","photos","deal"].forEach(t=>{
+    document.getElementById("tab-"+t).classList.toggle("hidden", t!==tab);
+  });
+  if(tab==="estimate") renderEstimateTab();
+  if(tab==="photos") renderPhotosTab();
+  if(tab==="deal") renderDealTab();
+}
+
+/* ---------------- Main project render ---------------- */
+function renderProject(){
+  const p = getProject(currentProjectId);
+  if(!p) return goHome();
+  document.getElementById("proj-title").textContent = p.name;
+  document.getElementById("proj-addr").textContent = p.address || "No notes added";
+  const prog = projectProgress(p);
+  document.getElementById("progress-text").textContent = `${prog.done} / ${prog.total} groups reviewed`;
+  document.getElementById("progress-pct").textContent = prog.pct+"%";
+  document.getElementById("progress-fill").style.width = prog.pct+"%";
+  document.getElementById("totalbar-amt").textContent = fmtMoney(projectTotal(p));
+  switchTab(currentTab);
+}
+
+function renderEstimateTab(){
+  const p = getProject(currentProjectId);
+  const cont = document.getElementById("tab-estimate");
+
+  // group rooms by section
+  const bySection = {};
+  p.rooms.forEach(room=>{
+    const def = ROOM_TYPES[room.type];
+    (bySection[def.section] = bySection[def.section]||[]).push(room);
+  });
+
+  let html = "";
+  SECTION_ORDER.forEach(section=>{
+    const rooms = bySection[section];
+    if(!rooms) return;
+    const multiType = Object.keys(ROOM_TYPES).find(t=>ROOM_TYPES[t].section===section && ROOM_TYPES[t].multi);
+    html += `<div class="section-block">
+      <div class="section-head">
+        <h2>${section}</h2>
+        ${multiType ? `<button class="add-room-btn" onclick="addRoomInstance(getProject(currentProjectId),'${multiType}');renderProject();">+ Add</button>` : ""}
+      </div>
+      ${rooms.map(room=>renderRoomCard(p, room)).join("")}
+    </div>`;
+  });
+  cont.innerHTML = html;
+}
+
+function renderRoomCard(project, room){
+  const def = ROOM_TYPES[room.type];
+  const label = def.multi ? room.label : def.label;
+  const removeBtn = def.multi ? `<button class="room-remove" onclick="confirmRemoveRoom('${room.instanceId}','${escJs(label)}')">Remove</button>` : "";
+  return `<div class="room-card">
+    <div class="room-head">
+      <div>
+        <div class="room-head-name">${escapeHtml(label)}</div>
+      </div>
+      ${removeBtn}
+    </div>
+    ${def.groups.map(g=>renderGroup(project, room, g)).join("")}
+  </div>`;
+}
+
+function renderGroup(project, room, group){
+  const gKey = room.instanceId+"::"+group;
+  const isOpen = openGroups.has(gKey);
+  const noActionKey = gKey;
+  const isNoAction = !!project.noAction[noActionKey];
+  const sels = selectionsForRoomGroup(project, room.instanceId, group);
+  const groupTotal = sels.reduce((s,x)=>s+(x.qty||0)*(x.costOverride!==undefined&&x.costOverride!==null?x.costOverride:x.itemCost),0);
+  const touched = groupIsTouched(project, room.instanceId, group);
+  const items = itemsForGroup(project, group);
+
+  const itemsHtml = items.map(it=>{
+    const sel = sels.find(s=>s.itemId===it.id);
+    const qty = sel ? sel.qty : 0;
+    const cost = sel && sel.costOverride!==undefined && sel.costOverride!==null ? sel.costOverride : it.cost;
+    const lineTotal = qty*cost;
+    return `<div class="item-row">
+      <input type="checkbox" class="item-check" ${qty>0?"checked":""} onchange="toggleItem('${room.instanceId}','${group}','${it.id}',this.checked)">
+      <div class="item-main">
+        <div class="item-name">${escapeHtml(it.name)}</div>
+        <div class="item-meta">
+          <span>${fmtMoney2(cost)}/${escapeHtml(it.unit)}</span>
+          <button onclick="openPriceOverride('${room.instanceId}','${group}','${it.id}', ${cost})">edit price</button>
+        </div>
+      </div>
+      <div class="qty-group">
+        <button class="qty-btn" onclick="stepQty('${room.instanceId}','${group}','${it.id}',-1)">−</button>
+        <input class="qty-input" type="number" min="0" step="any" value="${qty}" onchange="setQty('${room.instanceId}','${group}','${it.id}',this.value)">
+        <button class="qty-btn" onclick="stepQty('${room.instanceId}','${group}','${it.id}',1)">+</button>
+      </div>
+      <div class="line-total">${qty>0?fmtMoney(lineTotal):""}</div>
+      <button class="item-del" title="Remove item from this project" onclick="deleteProjectItem('${it.id}','${escJs(it.name)}')">🗑</button>
+    </div>`;
+  }).join("");
+
+  return `<div class="group">
+    <div class="group-head" onclick="toggleGroupOpen('${gKey}')">
+      <span class="group-chev ${isOpen?'open':''}">▶</span>
+      <span class="group-status ${isNoAction?'noaction':(touched?'done':'')}"></span>
+      <span class="group-title">${GROUP_LABELS[group]}</span>
+      <span class="group-sub-total">${groupTotal>0?fmtMoney(groupTotal):(isNoAction?"—":"")}</span>
+    </div>
+    ${isOpen?`<div class="group-body">
+      <div class="noaction-row">
+        <input type="checkbox" class="item-check" ${isNoAction?"checked":""} onchange="toggleNoAction('${room.instanceId}','${group}',this.checked)">
+        <label>No action needed — reviewed, nothing to repair</label>
+      </div>
+      ${itemsHtml}
+      <button class="add-item-btn" onclick="openAddProjectItem('${room.instanceId}','${group}')">+ Add a line item to this group</button>
+    </div>`:""}
+  </div>`;
+}
+
+function toggleGroupOpen(gKey){
+  if(openGroups.has(gKey)) openGroups.delete(gKey); else openGroups.add(gKey);
+  renderEstimateTab();
+}
+
+function toggleNoAction(roomInstanceId, group, checked){
+  const p = getProject(currentProjectId);
+  const key = roomInstanceId+"::"+group;
+  if(checked) p.noAction[key]=true; else delete p.noAction[key];
+  persistProject(p);
+  renderProject();
+}
+
+function toggleItem(roomInstanceId, group, itemId, checked){
+  const p = getProject(currentProjectId);
+  const cat = projectCatalogById(p);
+  const existing = Object.entries(p.selections).find(([k,v])=>v.roomInstanceId===roomInstanceId&&v.group===group&&v.itemId===itemId);
+  if(checked){
+    if(!existing){
+      const it = cat[itemId];
+      p.selections[uid("sel")] = {itemId, roomInstanceId, group, qty:1, itemCost:it.cost, costOverride:null};
+    }
+  } else {
+    if(existing) delete p.selections[existing[0]];
+  }
+  persistProject(p);
+  renderProject();
+}
+function stepQty(roomInstanceId, group, itemId, delta){
+  const p = getProject(currentProjectId);
+  const entry = Object.entries(p.selections).find(([k,v])=>v.roomInstanceId===roomInstanceId&&v.group===group&&v.itemId===itemId);
+  const cat = projectCatalogById(p);
+  if(!entry){
+    if(delta>0){
+      const it = cat[itemId];
+      p.selections[uid("sel")] = {itemId, roomInstanceId, group, qty:1, itemCost:it.cost, costOverride:null};
+    }
+  } else {
+    const [k,v] = entry;
+    v.qty = Math.max(0, round2((v.qty||0)+delta));
+    if(v.qty===0) delete p.selections[k];
+  }
+  persistProject(p);
+  renderProject();
+}
+function setQty(roomInstanceId, group, itemId, value){
+  const p = getProject(currentProjectId);
+  const num = Math.max(0, parseFloat(value)||0);
+  const entry = Object.entries(p.selections).find(([k,v])=>v.roomInstanceId===roomInstanceId&&v.group===group&&v.itemId===itemId);
+  const cat = projectCatalogById(p);
+  if(!entry){
+    if(num>0){
+      const it = cat[itemId];
+      p.selections[uid("sel")] = {itemId, roomInstanceId, group, qty:num, itemCost:it.cost, costOverride:null};
+    }
+  } else {
+    const [k,v] = entry;
+    if(num===0) delete p.selections[k]; else v.qty = num;
+  }
+  persistProject(p);
+  renderProject();
+}
+function round2(n){ return Math.round(n*100)/100; }
+
+function openPriceOverride(roomInstanceId, group, itemId, currentCost){
+  renderModal(`
+    <h3>Edit Price — This Project</h3>
+    <p class="help-text">Overrides the unit cost for this item on this walkthrough only. Standard pricing (all projects) is edited from the gear menu on the Projects screen.</p>
+    <div class="field"><label>Unit cost ($)</label><input id="po-cost" type="number" step="0.01" value="${currentCost}"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPriceOverride('${itemId}')">Save</button>
+    </div>
+  `);
+}
+function submitPriceOverride(itemId){
+  const p = getProject(currentProjectId);
+  const val = parseFloat(document.getElementById("po-cost").value);
+  if(!isNaN(val)){
+    p.priceOverrides[itemId] = val;
+    // also update itemCost on any active selections referencing this item so totals/UI reflect immediately
+    Object.values(p.selections).forEach(sel=>{ if(sel.itemId===itemId) sel.itemCost = val; });
+    persistProject(p);
+  }
+  closeModal();
+  renderProject();
+}
+
+function openAddProjectItem(roomInstanceId, group){
+  renderModal(`
+    <h3>Add Line Item</h3>
+    <p class="help-text">Adds a one-off item to <b>${GROUP_LABELS[group]}</b> for this project only.</p>
+    <div class="field"><label>Item name</label><input id="ai-name" placeholder="e.g. Chimney repair"></div>
+    <div class="field"><label>Unit cost ($)</label><input id="ai-cost" type="number" step="0.01" value="0"></div>
+    <div class="field"><label>Unit</label><input id="ai-unit" placeholder="e.g. sqft, LF, ea., room, flat"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddProjectItem('${roomInstanceId}','${group}')">Add Item</button>
+    </div>
+  `);
+}
+function submitAddProjectItem(roomInstanceId, group){
+  const p = getProject(currentProjectId);
+  const name = document.getElementById("ai-name").value.trim();
+  const cost = parseFloat(document.getElementById("ai-cost").value)||0;
+  const unit = document.getElementById("ai-unit").value.trim() || "ea.";
+  if(!name){ toast("Enter an item name"); return; }
+  const id = uid("custom");
+  p.projectCustomItems.push({id, name, cost, unit, group});
+  p.selections[uid("sel")] = {itemId:id, roomInstanceId, group, qty:1, itemCost:cost, costOverride:null};
+  persistProject(p);
+  closeModal();
+  openGroups.add(roomInstanceId+"::"+group);
+  renderProject();
+  toast("Item added");
+}
+
+function deleteProjectItem(itemId, name){
+  renderModal(`
+    <h3>Remove item?</h3>
+    <p style="font-size:13px;color:var(--ink-dim);">"${escapeHtml(name)}" will be hidden from this walkthrough's checklist. The standard catalog is unaffected.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="reallyDeleteProjectItem('${itemId}')">Remove</button>
+    </div>
+  `);
+}
+function reallyDeleteProjectItem(itemId){
+  const p = getProject(currentProjectId);
+  if(!p.projectDeletedItemIds.includes(itemId)) p.projectDeletedItemIds.push(itemId);
+  Object.keys(p.selections).forEach(k=>{ if(p.selections[k].itemId===itemId) delete p.selections[k]; });
+  p.projectCustomItems = p.projectCustomItems.filter(it=>it.id!==itemId);
+  persistProject(p);
+  closeModal();
+  renderProject();
+  toast("Item removed from this project");
+}
+
+function confirmRemoveRoom(instanceId, label){
+  renderModal(`
+    <h3>Remove ${escapeHtml(label)}?</h3>
+    <p style="font-size:13px;color:var(--ink-dim);">All selections for this room will be cleared.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="removeRoomInstance(getProject(currentProjectId),'${instanceId}');closeModal();renderProject();">Remove</button>
+    </div>
+  `);
+}
+
+/* ---------------- Photos tab ---------------- */
+function renderPhotosTab(){
+  const p = getProject(currentProjectId);
+  const cont = document.getElementById("tab-photos");
+  cont.innerHTML = `
+    <p class="help-text">Photos save with this project. Use them for damage documentation or to capture serial numbers on HVAC, water heater, and appliance nameplates.</p>
+    <div class="photo-grid" id="photo-grid">
+      <label class="add-photo-tile">
+        <span class="plus">＋</span>Add Photo
+        <input type="file" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoCapture(this.files)">
+      </label>
+    </div>
+  `;
+  const grid = document.getElementById("photo-grid");
+  p.photos.slice().reverse().forEach(ph=>{
+    const tile = document.createElement("div");
+    tile.className = "photo-thumb";
+    tile.onclick = ()=>openPhotoDetail(ph.id);
+    tile.innerHTML = `<img src="${ph.dataUrl}">${ph.serial?`<div class="serial-tag">S/N ${escapeHtml(ph.serial)}</div>`:""}`;
+    grid.appendChild(tile);
+  });
+}
+function handlePhotoCapture(files){
+  if(!files || !files.length) return;
+  const p = getProject(currentProjectId);
+  [...files].forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      p.photos.push({id:uid("photo"), dataUrl:e.target.result, note:"", serial:"", createdAt:Date.now()});
+      persistProject(p);
+      renderPhotosTab();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function openPhotoDetail(photoId){
+  const p = getProject(currentProjectId);
+  const ph = p.photos.find(x=>x.id===photoId);
+  renderModal(`
+    <h3>Photo</h3>
+    <img src="${ph.dataUrl}" style="width:100%;border-radius:10px;margin-bottom:12px;">
+    <div class="field"><label>Note</label><input id="ph-note" value="${escapeAttr(ph.note)}" placeholder="e.g. Furnace nameplate, hallway closet"></div>
+    <div class="field"><label>Serial / model number</label><input id="ph-serial" value="${escapeAttr(ph.serial)}" placeholder="Enter manually or scan"></div>
+    <button class="btn btn-secondary" style="width:100%;margin-bottom:10px;" onclick="runSerialScan('${photoId}')" id="scan-btn">🔍 Scan photo for serial number</button>
+    <div class="btn-row">
+      <button class="btn btn-danger" onclick="removePhoto('${photoId}')">Delete</button>
+      <button class="btn btn-primary" onclick="savePhotoDetail('${photoId}')">Save</button>
+    </div>
+  `, {center:true});
+}
+function savePhotoDetail(photoId){
+  const p = getProject(currentProjectId);
+  const ph = p.photos.find(x=>x.id===photoId);
+  ph.note = document.getElementById("ph-note").value.trim();
+  ph.serial = document.getElementById("ph-serial").value.trim();
+  persistProject(p);
+  closeModal();
+  renderPhotosTab();
+}
+function removePhoto(photoId){
+  const p = getProject(currentProjectId);
+  p.photos = p.photos.filter(x=>x.id!==photoId);
+  persistProject(p);
+  closeModal();
+  renderPhotosTab();
+}
+
+let tesseractLoaded = false;
+function loadTesseract(){
+  return new Promise((resolve,reject)=>{
+    if(tesseractLoaded) return resolve();
+    if(!navigator.onLine) return reject(new Error("offline"));
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js";
+    s.onload = ()=>{ tesseractLoaded=true; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+async function runSerialScan(photoId){
+  const p = getProject(currentProjectId);
+  const ph = p.photos.find(x=>x.id===photoId);
+  const btn = document.getElementById("scan-btn");
+  btn.textContent = "Scanning…";
+  btn.disabled = true;
+  try{
+    await loadTesseract();
+    const result = await Tesseract.recognize(ph.dataUrl, 'eng');
+    const raw = result.data.text || "";
+    // heuristic: look for a line with a label like S/N, SERIAL, MODEL followed by alphanumeric code,
+    // otherwise fall back to the longest alphanumeric token (6+ chars, mixed letters/numbers)
+    let guess = "";
+    const labelMatch = raw.match(/(?:S\/?N|SERIAL(?:\s*NO)?|MODEL(?:\s*NO)?)[\s:#-]*([A-Z0-9-]{5,})/i);
+    if(labelMatch){
+      guess = labelMatch[1];
+    } else {
+      const tokens = raw.match(/[A-Z0-9-]{6,}/gi) || [];
+      const scored = tokens
+        .filter(t=>/[0-9]/.test(t) && /[A-Z]/i.test(t))
+        .sort((a,b)=>b.length-a.length);
+      guess = scored[0] || "";
+    }
+    if(guess){
+      document.getElementById("ph-serial").value = guess;
+      toast("Serial candidate found — please verify");
+    } else {
+      toast("No clear serial number found — enter manually");
+    }
+  }catch(e){
+    toast(navigator.onLine ? "Scan failed — enter manually" : "Scanning needs an internet connection");
+  }finally{
+    btn.textContent = "🔍 Scan photo for serial number";
+    btn.disabled = false;
+  }
+}
+
+/* ---------------- Deal Analyzer tab (creative addition) ---------------- */
+function renderDealTab(){
+  const p = getProject(currentProjectId);
+  const cont = document.getElementById("tab-deal");
+  const d = p.deal;
+  cont.innerHTML = `
+    <div class="card">
+      <h3>Deal Analyzer</h3>
+      <p class="help-text" style="margin-top:0;">Pulls your live repair total from the Estimate tab and projects margin before you leave the driveway.</p>
+      <div class="field"><label>After Repair Value (ARV)</label><input id="da-arv" type="number" step="1000" value="${d.arv}" oninput="updateDeal()"></div>
+      <div class="field"><label>Target offer / purchase price</label><input id="da-offer" type="number" step="1000" value="${d.offerPrice}" oninput="updateDeal()"></div>
+      <div class="field"><label>Estimated hold time (months)</label><input id="da-months" type="number" step="0.5" value="${d.holdingMonths}" oninput="updateDeal()"></div>
+      <div class="field"><label>Holding cost / month (financing, taxes, utilities)</label><input id="da-hold" type="number" step="50" value="${d.holdingCostPerMonth}" oninput="updateDeal()"></div>
+      <div class="field"><label>Selling costs (% of ARV — agent fees, closing)</label><input id="da-sell" type="number" step="0.5" value="${d.sellingCostPct}" oninput="updateDeal()"></div>
+    </div>
+    <div class="card" id="deal-results"></div>
+  `;
+  updateDeal(true);
+}
+function updateDeal(skipSave){
+  const p = getProject(currentProjectId);
+  const arv = parseFloat(document.getElementById("da-arv").value)||0;
+  const offer = parseFloat(document.getElementById("da-offer").value)||0;
+  const months = parseFloat(document.getElementById("da-months").value)||0;
+  const holdMo = parseFloat(document.getElementById("da-hold").value)||0;
+  const sellPct = parseFloat(document.getElementById("da-sell").value)||0;
+  p.deal = {arv, offerPrice:offer, holdingMonths:months, holdingCostPerMonth:holdMo, sellingCostPct:sellPct};
+  if(!skipSave) persistProject(p);
+  else saveProjects(projects);
+
+  const repairs = projectTotal(p);
+  const holdingCost = months*holdMo;
+  const sellingCost = arv*(sellPct/100);
+  const totalCost = offer + repairs + holdingCost + sellingCost;
+  const profit = arv - totalCost;
+  const marginPct = arv>0 ? (profit/arv*100) : 0;
+
+  let color = "var(--red)", bg="var(--red-dim)", verdict="Tight — re-check the numbers";
+  if(marginPct>=20){ color="var(--green)"; bg="var(--green-dim)"; verdict="Healthy margin"; }
+  else if(marginPct>=10){ color="var(--amber)"; bg="#FBEED2"; verdict="Workable — thin margin"; }
+
+  const gaugePct = Math.max(0, Math.min(100, marginPct*2.5)); // scale so 40% margin = full bar
+
+  document.getElementById("deal-results").innerHTML = `
+    <h3>Projected Outcome</h3>
+    <div class="dr"><span class="k">Purchase price</span><span class="v">${fmtMoney(offer)}</span></div>
+    <div class="dr"><span class="k">Repair estimate (live)</span><span class="v">${fmtMoney(repairs)}</span></div>
+    <div class="dr"><span class="k">Holding costs</span><span class="v">${fmtMoney(holdingCost)}</span></div>
+    <div class="dr"><span class="k">Selling costs</span><span class="v">${fmtMoney(sellingCost)}</span></div>
+    <div class="dr"><span class="k"><b>Total cost basis</b></span><span class="v">${fmtMoney(totalCost)}</span></div>
+    <div class="dr"><span class="k">After Repair Value</span><span class="v">${fmtMoney(arv)}</span></div>
+    <div class="dr"><span class="k"><b>Projected profit</b></span><span class="v" style="color:${color};font-weight:700;">${fmtMoney(profit)}</span></div>
+    <div class="margin-gauge">
+      <div class="gauge-track"><div class="gauge-fill" style="width:${gaugePct}%;background:${color};"></div></div>
+      <div class="gauge-label" style="color:${color};">${marginPct.toFixed(1)}%</div>
+      <div class="gauge-sub" style="background:${bg};color:${color};display:inline-block;padding:3px 10px;border-radius:12px;width:100%;text-align:center;box-sizing:border-box;">${verdict}</div>
+    </div>
+  `;
+}
+
+/* ---------------- Settings screen (global standard pricing) ---------------- */
+function renderSettings(){
+  const search = (document.getElementById("settings-search")?.value||"").toLowerCase();
+  const items = getCatalog().sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name));
+  const filtered = items.filter(it=>it.name.toLowerCase().includes(search) || (GROUP_LABELS[it.group]||"").toLowerCase().includes(search));
+  document.getElementById("settings-list").innerHTML = filtered.map(it=>`
+    <div class="setting-item-row">
+      <div class="nm">${escapeHtml(it.name)}<br><span class="grp-tag">${GROUP_LABELS[it.group]||it.group} · ${it.unit}</span></div>
+      <input type="number" step="0.01" value="${it.cost}" onchange="updateGlobalPrice('${it.id}',this.value)">
+      <button class="item-del" onclick="deleteGlobalItem('${it.id}','${escJs(it.name)}')">🗑</button>
+    </div>
+  `).join("") || `<p class="help-text">No items match "${escapeHtml(search)}".</p>`;
+}
+function updateGlobalPrice(itemId, value){
+  const val = parseFloat(value);
+  if(isNaN(val)) return;
+  const isDefault = DEFAULT_ITEMS.some(it=>it.id===itemId);
+  if(isDefault){
+    settings.priceOverrides[itemId] = val;
+  } else {
+    const ci = settings.customItems.find(it=>it.id===itemId);
+    if(ci) ci.cost = val;
+  }
+  saveSettings(settings);
+  toast("Standard price updated");
+}
+function deleteGlobalItem(itemId, name){
+  renderModal(`
+    <h3>Remove "${escapeHtml(name)}" from the standard catalog?</h3>
+    <p style="font-size:13px;color:var(--ink-dim);">It will no longer appear as a default option in new or existing walkthroughs. Projects that already used it keep their saved line.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="reallyDeleteGlobalItem('${itemId}')">Remove</button>
+    </div>
+  `);
+}
+function reallyDeleteGlobalItem(itemId){
+  const isDefault = DEFAULT_ITEMS.some(it=>it.id===itemId);
+  if(isDefault){
+    if(!settings.deletedItemIds.includes(itemId)) settings.deletedItemIds.push(itemId);
+  } else {
+    settings.customItems = settings.customItems.filter(it=>it.id!==itemId);
+  }
+  saveSettings(settings);
+  closeModal();
+  renderSettings();
+  toast("Removed from standard catalog");
+}
+function openAddGlobalItem(){
+  const groupOptions = Object.keys(GROUP_LABELS).map(g=>`<option value="${g}">${GROUP_LABELS[g]}</option>`).join("");
+  renderModal(`
+    <h3>Add Standard Item</h3>
+    <p class="help-text">This becomes a default option across every future and existing project.</p>
+    <div class="field"><label>Item name</label><input id="ag-name" placeholder="e.g. Radon mitigation system"></div>
+    <div class="field"><label>Unit cost ($)</label><input id="ag-cost" type="number" step="0.01" value="0"></div>
+    <div class="field"><label>Unit</label><input id="ag-unit" placeholder="e.g. sqft, LF, ea., room, flat"></div>
+    <div class="field"><label>Group</label><select id="ag-group">${groupOptions}</select></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddGlobalItem()">Add</button>
+    </div>
+  `);
+}
+function submitAddGlobalItem(){
+  const name = document.getElementById("ag-name").value.trim();
+  const cost = parseFloat(document.getElementById("ag-cost").value)||0;
+  const unit = document.getElementById("ag-unit").value.trim() || "ea.";
+  const group = document.getElementById("ag-group").value;
+  if(!name){ toast("Enter an item name"); return; }
+  settings.customItems.push({id:uid("global"), name, cost, unit, group});
+  saveSettings(settings);
+  closeModal();
+  renderSettings();
+  toast("Added to standard catalog");
+}
+function resetPricingDefaults(){
+  renderModal(`
+    <h3>Reset all standard pricing?</h3>
+    <p style="font-size:13px;color:var(--ink-dim);">Removes all global price overrides, custom standard items, and deletions. Individual project overrides are untouched.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="reallyResetPricing()">Reset</button>
+    </div>
+  `);
+}
+function reallyResetPricing(){
+  settings = { priceOverrides:{}, customItems:[], deletedItemIds:[] };
+  saveSettings(settings);
+  closeModal();
+  renderSettings();
+  toast("Standard pricing reset");
+}
+
+/* ---------------- Export: ZIP (Excel + photos) ---------------- */
+async function exportProject(){
+  const p = getProject(currentProjectId);
+  toast("Building export…");
+  try{
+    const rows = [["Section","Room","Group","Item ID","Item Name","Qty","Unit","Unit Cost","Line Total"]];
+    p.rooms.forEach(room=>{
+      const def = ROOM_TYPES[room.type];
+      const label = def.multi ? room.label : def.label;
+      def.groups.forEach(group=>{
+        const key = room.instanceId+"::"+group;
+        if(p.noAction[key]){
+          rows.push([def.section, label, GROUP_LABELS[group], "", "No action needed", "", "", "", "$0.00"]);
+          return;
+        }
+        selectionsForRoomGroup(p, room.instanceId, group).forEach(sel=>{
+          if(!sel.qty) return;
+          const cost = sel.costOverride!==undefined && sel.costOverride!==null ? sel.costOverride : sel.itemCost;
+          const cat = projectCatalogById(p);
+          const it = cat[sel.itemId] || {name:sel.itemId, unit:""};
+          rows.push([def.section, label, GROUP_LABELS[group], sel.itemId, it.name, sel.qty, it.unit, cost.toFixed(2), (sel.qty*cost).toFixed(2)]);
+        });
+      });
+    });
+    const total = projectTotal(p);
+    rows.push([]);
+    rows.push(["","","","","","","","GRAND TOTAL", "$"+total.toFixed(2)]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:20},{wch:16},{wch:18},{wch:10},{wch:30},{wch:7},{wch:10},{wch:11},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws, "Cost Breakdown");
+
+    // Deal summary sheet
+    const d = p.deal;
+    const repairs = total;
+    const holdingCost = (d.holdingMonths||0)*(d.holdingCostPerMonth||0);
+    const sellingCost = (d.arv||0)*((d.sellingCostPct||0)/100);
+    const totalCost = (d.offerPrice||0) + repairs + holdingCost + sellingCost;
+    const profit = (d.arv||0) - totalCost;
+    const dealRows = [
+      ["Spark Homes — Deal Summary"],
+      ["Property", p.name],
+      ["Notes", p.address],
+      [],
+      ["Purchase price", d.offerPrice||0],
+      ["Repair estimate", repairs],
+      ["Holding costs", holdingCost],
+      ["Selling costs", sellingCost],
+      ["Total cost basis", totalCost],
+      ["After Repair Value (ARV)", d.arv||0],
+      ["Projected profit", profit],
+      ["Projected margin %", (d.arv? (profit/d.arv*100):0).toFixed(1)+"%"]
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(dealRows);
+    ws2['!cols'] = [{wch:26},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws2, "Deal Summary");
+
+    const xlsxOut = XLSX.write(wb, {type:"array", bookType:"xlsx"});
+
+    const zip = new JSZip();
+    const safeName = (p.name||"project").replace(/[^a-z0-9]+/gi,"_").toLowerCase();
+    zip.file(`${safeName}_cost_breakdown.xlsx`, xlsxOut);
+    const photoFolder = zip.folder("photos");
+    p.photos.forEach((ph,i)=>{
+      const base64 = ph.dataUrl.split(",")[1];
+      const ext = ph.dataUrl.match(/data:image\/(\w+);/)?.[1] || "jpg";
+      const fname = `photo_${String(i+1).padStart(2,"0")}${ph.serial?("_SN-"+ph.serial.replace(/[^a-z0-9]+/gi,"")):""}.${ext}`;
+      photoFolder.file(fname, base64, {base64:true});
+    });
+
+    const blob = await zip.generateAsync({type:"blob"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName}_estimate.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    toast("Export downloaded");
+  }catch(e){
+    console.error(e);
+    toast("Export failed — see console");
+  }
+}
+
+/* ---------------- Online/offline indicator ---------------- */
+function updateOfflinePill(){
+  const pill = document.getElementById("offline-pill");
+  if(!pill) return;
+  const online = navigator.onLine;
+  pill.classList.toggle("off", !online);
+  document.getElementById("offline-text").textContent = online ? "Online" : "Offline — saved locally";
+}
+window.addEventListener("online", updateOfflinePill);
+window.addEventListener("offline", updateOfflinePill);
+
+/* ---------------- Install prompt ---------------- */
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", e=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
+/* ---------------- Service worker ---------------- */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(err=>console.warn("SW registration failed", err));
+  });
+}
+
+/* ---------------- Init ---------------- */
+renderProjectList();
+updateOfflinePill();
+</script>
+</body>
+</html>
